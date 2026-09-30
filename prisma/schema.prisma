@@ -1,0 +1,106 @@
+// InterviewBuddy — Prisma Schema
+// 数据来源：InterviewBuddy-PRD-v2 第四节「数据库设计」
+//
+// 数据库：SQLite（零依赖，数据库就是项目内的一个 .db 文件，拷走项目即带走数据）
+// 说明：SQLite 下 String 默认映射为 TEXT，因此不使用 @db.Text 标注。
+// 若需切回 MySQL，见 .migration/schema.mysql.prisma 与 .migration/env.mysql。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 岗位投递
+model Job {
+  id        String   @id @default(cuid())
+  company   String // 公司名称
+  position  String // 岗位名称
+  jd        String // 职位描述（JD全文）
+  salary    String? // 薪资范围
+  location  String? // 工作地点
+  url       String? // 投递链接
+  channel   String? // 投递渠道（Boss直聘/拉勾/官网/内推等）
+  status    String   @default("APPLIED") // 状态
+  appliedAt DateTime @default(now()) // 投递日期
+  updatedAt DateTime @updatedAt
+  notes     String? // 备注
+  priority  Int      @default(0) // 优先级 (0=普通, 1=感兴趣, 2=非常想进)
+
+  questions  Question[] // 关联面试题
+  interviews Interview[] // 关联面试记录
+  tags       JobTag[]
+
+  @@index([status])
+  @@index([appliedAt])
+}
+
+// 岗位标签（多对多）
+model JobTag {
+  id    String @id @default(cuid())
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId String
+  tag   String // 如 "前端" "React" "大厂" "远程"
+
+  @@index([jobId])
+}
+
+// 面试题库
+model Question {
+  id         String   @id @default(cuid())
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId      String
+  type       String // 类型: "tech"技术 / "behavior"行为 / "scene"场景 / "ask_back"反问
+  difficulty String   @default("medium") // 难度: easy / medium / hard
+  content    String // 题目内容
+  answer     String? // AI 生成的参考答案思路
+  myAnswer   String? // 我的回答
+  rating     Int? // 自评分 1-5
+  isFavorite Boolean  @default(false) // 收藏
+  isWeak     Boolean  @default(false) // 标记为薄弱点
+  createdAt  DateTime @default(now())
+
+  @@index([jobId])
+  @@index([isWeak])
+}
+
+// 面试记录
+model Interview {
+  id              String   @id @default(cuid())
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId           String
+  round           String // 轮次: "一面" "二面" "HR面" "笔试"
+  date            DateTime // 面试日期
+  duration        Int? // 时长（分钟）
+  interviewer     String? // 面试官（可选）
+  mood            String? // 面试感受: "good" / "normal" / "bad"
+  actualQuestions String? // 实际被问到的问题（文本）
+  notes           String? // 复盘笔记
+  aiFeedback      String? // AI 生成的复盘分析（结构化 JSON 字符串）
+  createdAt       DateTime @default(now())
+
+  @@index([jobId])
+  @@index([date])
+}
+
+// 键值配置（用于前端可保存的本地设置，如当前选中的 AI 模型）
+model Setting {
+  key       String @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// 状态定义（供参考，不用建表）
+// APPLIED    → 已投递
+// VIEWED     → 已被查看
+// WRITTEN    → 笔试中
+// INTERVIEW1 → 一面
+// INTERVIEW2 → 二面
+// INTERVIEW3 → 三面+
+// HR         → HR面
+// OFFER      → 已拿Offer
+// REJECTED   → 已拒绝
+// GAVE_UP    → 已放弃
